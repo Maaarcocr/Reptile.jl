@@ -1,11 +1,14 @@
-using Flux
-using MLDatasets
+using Base.Iterators: partition
 using CuArrays
+using Flux
 using Flux: onehotbatch, throttle
 using Flux.Tracker: back!, update!
 using Images
+using MLDatasets
+using Plots
 
 println("load datasets")
+
 fashion_x, fashion_y = FashionMNIST.traindata(Float64)
 cifar_x, cifar_y = CIFAR10.traindata(Float64)
 mnist_x, mnist_y = MNIST.traindata(Float64)
@@ -15,22 +18,26 @@ resized(img) = imresize(img, (32,32))
 mnist_x = real.(mapslices(resized, MNIST.convert2image(mnist_x), dims=[1,2]))
 fashion_x = real.(mapslices(resized, MNIST.convert2image(fashion_x), dims=[1,2]))
 
-fashion_x = reshape(fashion_x, (32,32,1,60000)) |> gpu
-mnist_x = reshape(mnist_x, (32,32,1,60000)) |> gpu
-cifar_x = reshape(real.(Gray.(CIFAR10.convert2image(cifar_x))), (32,32,1,50000)) |> gpu
+fashion_x = reshape(fashion_x, (32,32,1,60000))
+mnist_x = reshape(mnist_x, (32,32,1,60000))
+cifar_x = reshape(real.(Gray.(CIFAR10.convert2image(cifar_x))), (32,32,1,50000))
 
-mnist_y = onehotbatch(mnist_y, 0:9) |> gpu
-fashion_y = onehotbatch(fashion_y, 0:9) |> gpu
-cifar_y = onehotbatch(cifar_y, 0:9) |> gpu
+mnist_y = onehotbatch(mnist_y, 0:9)
+fashion_y = onehotbatch(fashion_y, 0:9)
+cifar_y = onehotbatch(cifar_y, 0:9)
+
+mnist_train = [(cat(mnist_x[:,:,:,i], dims=4), mnist_y[:,i])
+    for i in partition(1:60_000, 100)] |> gpu
+fashion_train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i])
+    for i in partition(1:60_000, 100)] |> gpu
+cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i])
+    for i in partition(1:50_000, 100)] |> gpu
+
+pick_sample(task) = task[rand(UInt64) % length(task) + 1]
 
 println("done datasets")
 
-function get_sample(xs, ys)
-    index = rand(UInt64) % (size(xs)[length(size(xs))] - 4) + 1
-    (xs[:,:,:,index:index+4], ys[:, index:index+4])
-end
-
-get_task() = [(cifar_x, cifar_y), (mnist_x, mnist_y)][rand(UInt64) % 2 + 1]
+get_task() = [cifar_train, mnist_train][rand(UInt64) % 2 + 1]
 
 m = Chain(
   Conv((3, 3), 1 => 64, relu, pad=(1, 1), stride=(1, 1)),
@@ -79,9 +86,9 @@ loss(m, x, y) = Flux.mse(m(x), y)
 for i in 1:1000
     temp_model = deepcopy(m)
     opt = SGD(params(temp_model))
-    task_x, task_y = get_task()
+    task = get_task()
     for j in 1:50
-        x, y = get_sample(task_x, task_y)
+        x, y = pick_sample(task)
         l = loss(temp_model, x, y)
         back!(l)
         opt()
@@ -94,8 +101,6 @@ for i in 1:1000
 end
 
 println("end meta learning")
-
-using Plots
 
 struct LossPlot
     plt::Plots.Plot
@@ -113,8 +118,8 @@ function save_plot(lp::LossPlot, name)
     png(lp.plt, name)
 end
 
-lp = LossPlot(plot([loss(m, get_sample(fashion_x,fashion_y)...).data]), false)
-lp2 = LossPlot(plot([loss(m2, get_sample(fashion_x,fashion_y)...).data]), false)
+lp = LossPlot(plot([loss(m, pick_sample(fashion_train)...).data]), false)
+lp2 = LossPlot(plot([loss(m2, pick_sample(fashion_train)...).data]), false)
 
 l(x,y) = loss(m,x,y)
 l2(x,y) = loss(m2,x,y)
@@ -122,11 +127,7 @@ l2(x,y) = loss(m2,x,y)
 opt = ADAM(params(m))
 opt2 = ADAM(params(m2))
 
-using Base.Iterators: partition
-train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i])
-    for i in partition(1:60_000, 100)] |> gpu
-
-Flux.train!(l, train, opt, cb = throttle(() -> lp(l(get_sample(fashion_x, fashion_y)...).data), 5))
-Flux.train!(l2, train, opt2, cb = throttle(() -> lp2(l2(fashion_x, fashion_y).data), 5))
+Flux.train!(l, fashion_train, opt, cb = throttle(() -> lp(l(pick_sample(fashion_train)...).data), 5))
+Flux.train!(l2, fashion_train, opt2, cb = throttle(() -> lp2(l2(pick_sample(fashion_train)...).data), 5))
 save_plot(lp, "meta")
 save_plot(lp2, "normal")
