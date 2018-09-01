@@ -33,11 +33,9 @@ fashion_train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i])
 cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i])
     for i in partition(1:50_000, 100)] |> gpu
 
-pick_sample(task) = task[rand(UInt64) % length(task) + 1]
-
 println("done datasets")
 
-get_task() = [cifar_train, mnist_train][rand(UInt64) % 2 + 1]
+get_task() = rand([cifar_train, mnist_train])
 
 m = Chain(
   Conv((3, 3), 1 => 64, relu, pad=(1, 1), stride=(1, 1)),
@@ -88,7 +86,7 @@ for i in 1:1000
     opt = SGD(params(temp_model))
     task = get_task()
     for j in 1:50
-        x, y = pick_sample(task)
+        x, y = rand(task)
         l = loss(temp_model, x, y)
         back!(l)
         opt()
@@ -118,8 +116,8 @@ function save_plot(lp::LossPlot, name)
     png(lp.plt, name)
 end
 
-lp = LossPlot(plot([loss(m, pick_sample(fashion_train)...).data]), false)
-lp2 = LossPlot(plot([loss(m2, pick_sample(fashion_train)...).data]), false)
+lp = LossPlot(plot([loss(m, rand(fashion_train)...).data]), false)
+lp2 = LossPlot(plot([loss(m2, rand(fashion_train)...).data]), false)
 
 l(x,y) = loss(m,x,y)
 l2(x,y) = loss(m2,x,y)
@@ -127,7 +125,7 @@ l2(x,y) = loss(m2,x,y)
 opt = ADAM(params(m))
 opt2 = ADAM(params(m2))
 
-Flux.train!(l, fashion_train, opt, cb = throttle(() -> lp(l(pick_sample(fashion_train)...).data), 5))
-Flux.train!(l2, fashion_train, opt2, cb = throttle(() -> lp2(l2(pick_sample(fashion_train)...).data), 5))
+Flux.train!(l, fashion_train, opt, cb = throttle(() -> lp(l(rand(fashion_train)...).data), 5))
+Flux.train!(l2, fashion_train, opt2, cb = throttle(() -> lp2(l2(rand(fashion_train)...).data), 5))
 save_plot(lp, "meta")
 save_plot(lp2, "normal")
