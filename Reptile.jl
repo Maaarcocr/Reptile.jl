@@ -37,10 +37,20 @@ cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i])
 # cifar_train = cifar_train |> cu
 # fashion_train = fashion_train |> cu
 
+mutable struct Dataset
+  data
+  index
+end
 
-println("done datasets")
+function next(d::Dataset)
+  d.index = (d.index + 1) % length(d.data)
+  return d.data[d.index]
+end
 
-m = Chain(
+cifar = Dataset(cifar_train, 0)
+mnist = Dataset(mnist_train, 0)
+
+model_creator() = Chain(
   Conv((3, 3), 1 => 64, relu, pad=(1, 1), stride=(1, 1)),
   BatchNorm(64),
   Conv((3, 3), 64 => 64, relu, pad=(1, 1), stride=(1, 1)),
@@ -80,7 +90,8 @@ m = Chain(
   Dense(4096, 10),
   softmax) #|> cu
 
-m2 = deepcopy(m)
+m = model_creator()
+m2 = model_creator()
 
 loss(m, x, y) = Flux.mse(m(x), y)
 
@@ -88,10 +99,10 @@ for i in 1:40
     println("i: ", i)
     temp_model = deepcopy(m)
     opt = SGD(params(temp_model))
-    task = rand([mnist_train, cifar_train])
+    task = rand([mnist, cifar])
     for j in 1:50
         println("j: ", j)
-        x, y = task[rand(UInt64) % length(task) + 1]
+        x, y = next(task)
         l = loss(temp_model, x, y)
         back!(l)
         opt()
