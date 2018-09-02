@@ -34,7 +34,6 @@ cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i])
     for i in partition(1:50000, 50)]
 
 mnist_train = mnist_train |> cu
-fashion_train = fashion_train |> cu
 cifar_train = cifar_train |> cu
 
 println("done datasets")
@@ -83,11 +82,12 @@ m2 = deepcopy(m)
 
 loss(m, x, y) = Flux.mse(m(x), y)
 
-for i in 1:40
+for i in 1:20
     temp_model = deepcopy(m)
     opt = SGD(params(temp_model))
     task = rand([mnist_train, cifar_train])
     for j in 1:50
+        println(length(task))
         x, y = task[rand(UInt64) % length(task) + 1]
         l = loss(temp_model, x, y)
         back!(l)
@@ -100,7 +100,7 @@ for i in 1:40
     end
 end
 
-println("end meta learning")
+finalize(mnist_train, cifar_train)
 
 struct LossPlot
     plt::Plots.Plot
@@ -126,6 +126,8 @@ l2(x,y) = loss(m2,x,y)
 
 opt = ADAM(params(m))
 opt2 = ADAM(params(m2))
+
+fashion_gpu = fashion_train |> cu
 
 Flux.train!(l, fashion_train, opt, cb = throttle(() -> lp(l(rand(fashion_train)...).data), 5))
 Flux.train!(l2, fashion_train, opt2, cb = throttle(() -> lp2(l2(rand(fashion_train)...).data), 5))
