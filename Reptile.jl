@@ -27,15 +27,17 @@ fashion_y = onehotbatch(fashion_y, 0:9)
 cifar_y = onehotbatch(cifar_y, 0:9)
 
 mnist_train = [(cat(mnist_x[:,:,:,i], dims=4), mnist_y[:,i])
-    for i in partition(1:60_000, 100)] |> gpu
+    for i in partition(1:60000, 50)]
 fashion_train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i])
-    for i in partition(1:60_000, 100)] |> gpu
+    for i in partition(1:60000, 50)]
 cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i])
-    for i in partition(1:50_000, 100)] |> gpu
+    for i in partition(1:50000, 50)]
+
+mnist_train = mnist_train |> cu
+fashion_train = fashion_train |> cu
+cifar_train = cifar_train |> cu
 
 println("done datasets")
-
-get_task() = rand([cifar_train, mnist_train])
 
 m = Chain(
   Conv((3, 3), 1 => 64, relu, pad=(1, 1), stride=(1, 1)),
@@ -75,16 +77,16 @@ m = Chain(
   Dense(4096, 4096, relu),
   Dropout(0.5),
   Dense(4096, 10),
-  softmax) |> gpu
+  softmax) |> cu
 
 m2 = deepcopy(m)
 
 loss(m, x, y) = Flux.mse(m(x), y)
 
-for i in 1:1000
+for i in 1:40
     temp_model = deepcopy(m)
     opt = SGD(params(temp_model))
-    task = get_task()
+    task = rand([mnist_train, cifar_train])
     for j in 1:50
         x, y = rand(task)
         l = loss(temp_model, x, y)
