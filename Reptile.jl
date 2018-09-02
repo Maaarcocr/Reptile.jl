@@ -88,7 +88,7 @@ for i in 1:40
     opt = SGD(params(temp_model))
     task = rand([mnist_train, cifar_train])
     for j in 1:50
-        x, y = rand(task)
+        x, y = task[rand(UInt64) % length(task) + 1]
         l = loss(temp_model, x, y)
         back!(l)
         opt()
