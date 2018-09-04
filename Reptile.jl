@@ -1,11 +1,13 @@
 using Base.Iterators: partition
-using CuArrays
+using CuArrays, CUDAnative, CUDAdrv
 using Flux
 using Flux: onehotbatch, throttle
 using Flux.Tracker: back!, update!
 using Images
 using MLDatasets
 using Plots
+
+device!(CuDevice(0))
 
 println("load datasets")
 
@@ -26,16 +28,16 @@ mnist_y = onehotbatch(mnist_y, 0:9)
 fashion_y = onehotbatch(fashion_y, 0:9)
 cifar_y = onehotbatch(cifar_y, 0:9)
 
-mnist_train = [(cat(mnist_x[:,:,:,i], dims=4), mnist_y[:,i])
+_mnist_train = [(cat(mnist_x[:,:,:,i], dims=4), mnist_y[:,i])
     for i in partition(1:60000, 10)]
-fashion_train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i])
+_fashion_train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i])
     for i in partition(1:60000, 10)]
-cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i])
+_cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i])
     for i in partition(1:50000, 10)]
 
-# mnist_train = mnist_train |> cu
-# cifar_train = cifar_train |> cu
-# fashion_train = fashion_train |> cu
+mnist_train = gpu(_mnist_train)
+cifar_train = gpu(_cifar_train)
+fashion_train = gpu(_fashion_train)
 
 mutable struct Dataset
   data
@@ -88,7 +90,7 @@ model_creator() = Chain(
   Dense(4096, 4096, relu),
   Dropout(0.5),
   Dense(4096, 10),
-  softmax) #|> cu
+  softmax) |> gpu
 
 m = model_creator()
 m2 = model_creator()
@@ -113,8 +115,6 @@ for i in 1:40
         update!(old_params[i], (new_params[i] - old_params[i]) * 0.1)
     end
 end
-
-finalize(mnist_train, cifar_train)
 
 struct LossPlot
     plt::Plots.Plot
