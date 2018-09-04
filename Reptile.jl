@@ -28,16 +28,13 @@ mnist_y = onehotbatch(mnist_y, 0:9)
 fashion_y = onehotbatch(fashion_y, 0:9)
 cifar_y = onehotbatch(cifar_y, 0:9)
 
-_mnist_train = [(cat(mnist_x[:,:,:,i], dims=4), mnist_y[:,i])
+mnist_train = [(cat(mnist_x[:,:,:,i], dims=4), mnist_y[:,i]) |> gpu
     for i in partition(1:60000, 10)]
-_fashion_train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i])
+fashion_train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i]) |> gpu
     for i in partition(1:60000, 10)]
-_cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i])
+cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i]) |> gpu
     for i in partition(1:50000, 10)]
 
-mnist_train = gpu(_mnist_train)
-cifar_train = gpu(_cifar_train)
-fashion_train = gpu(_fashion_train)
 
 mutable struct Dataset
   data
