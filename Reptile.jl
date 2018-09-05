@@ -29,11 +29,11 @@ fashion_y = onehotbatch(fashion_y, 0:9)
 cifar_y = onehotbatch(cifar_y, 0:9)
 
 mnist_train = [(cat(mnist_x[:,:,:,i], dims=4), mnist_y[:,i]) |> gpu
-    for i in partition(1:60000, 10)]
+    for i in partition(1:60000, 200)]
 fashion_train = [(cat(fashion_x[:,:,:,i], dims=4), fashion_y[:,i]) |> gpu
-    for i in partition(1:60000, 10)]
+    for i in partition(1:60000, 200)]
 cifar_train = [(cat(cifar_x[:,:,:,i], dims=4), cifar_y[:,i]) |> gpu
-    for i in partition(1:50000, 10)]
+    for i in partition(1:50000, 200)]
 
 
 mutable struct Dataset
